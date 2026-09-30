@@ -1,10 +1,17 @@
 import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
+dotenv.config();
+
 import { MongoClient, ObjectId } from 'mongodb';
 import * as cheerio from 'cheerio';
 
-dotenv.config();
+// Import your new authentication controllers and middleware
+import { registerWriter, loginWriter } from './controllers/authController.js';
+import { requireAuth, type AuthRequest } from './middleware/authMiddleware.js';
+
+
 
 const app = express();
 app.use(cors());
@@ -17,9 +24,11 @@ const client = new MongoClient(MONGO_URI);
 type ChapterDocument = {
   comments: Array<{
     id: ObjectId;
-    highlighted_text: string;
+    type: string;
+    author: string;
     comment: string;
-    position: unknown;
+    highlighted_text: string | null;
+    position: unknown | null;
     created_at: Date;
     resolved: boolean;
   }>;
@@ -32,10 +41,87 @@ const stripMediaFromDraft = (rawHtml: string): string => {
   return $.html();
 };
 
-app.post('/api/chapters/:id/save', async (req: Request, res: Response) => {
+// Helper to generate a short, read-only URL token for beta readers
+const generateShareToken = () => Math.random().toString(36).substring(2, 8);
+
+// ==========================================
+// PUBLIC ROUTES
+// ==========================================
+
+// Writer Authentication
+app.post('/api/auth/register', registerWriter);
+app.post('/api/auth/login', loginWriter);
+
+// GET CHAPTER BY SHARE TOKEN (For Beta Readers) - ADDED THIS ROUTE
+app.get('/api/beta/:token', async (req: Request, res: Response) => {
+  try {
+    await client.connect();
+    const db = client.db('writers_sandbox');
+    
+    // Find the chapter using the short token
+    const chapter = await db.collection('chapters').findOne({ 
+      share_token: req.params.token 
+    });
+
+    if (!chapter) {
+      res.status(404).json({ error: 'Invalid or expired beta link' });
+      return;
+    }
+
+    res.status(200).json(chapter);
+  } catch (error) {
+    console.error('Beta fetch error:', error);
+    res.status(500).json({ error: 'Failed to load chapter' });
+  }
+});
+
+// Beta Reader (Guest) Comments - Left unprotected intentionally
+app.post('/api/chapters/:id/comments', async (req: Request, res: Response) => {
   try {
     const chapterIdParam = req.params.id;
-    if (typeof chapterIdParam !== 'string') {
+    if (typeof chapterIdParam !== 'string' || !ObjectId.isValid(chapterIdParam)) {
+      return res.status(400).json({ error: 'Invalid chapter ID' });
+    }
+    const chapterId = new ObjectId(chapterIdParam);
+    const { type, highlightedText, commentText, position, guestName } = req.body; 
+
+    await client.connect();
+    const db = client.db('writers_sandbox');
+    
+    await db.collection<ChapterDocument>('chapters').updateOne(
+      { _id: chapterId },
+      { 
+        $push: { 
+          comments: {
+            id: new ObjectId(),
+            type: type, 
+            author: guestName || 'Anonymous Reader',
+            comment: commentText,
+            highlighted_text: type === 'inline' ? highlightedText : null,
+            position: type === 'inline' ? position : null, 
+            created_at: new Date(),
+            resolved: false
+          } 
+        } 
+      }
+    );
+
+    res.status(200).json({ message: 'Comment saved successfully' });
+  } catch (error) {
+    console.error('Comment error:', error);
+    res.status(500).json({ error: 'Failed to save comment' });
+  }
+});
+
+// ==========================================
+// PROTECTED ROUTES (Requires JWT Token)
+// ==========================================
+
+// Save Chapter Draft - Protected by requireAuth
+app.post('/api/chapters/:id/save', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const chapterIdParam = req.params.id;
+    if (typeof chapterIdParam !== 'string' || !ObjectId.isValid(chapterIdParam)) {
       return res.status(400).json({ error: 'Invalid chapter ID' });
     }
     const chapterId = new ObjectId(chapterIdParam);
@@ -45,16 +131,13 @@ app.post('/api/chapters/:id/save', async (req: Request, res: Response) => {
     const db = client.db('writers_sandbox');
     const chaptersCollection = db.collection('chapters');
 
-    // 1. Fetch the current live draft before overwriting it
     const existingChapter = await chaptersCollection.findOne({ _id: chapterId });
     
     let strippedOldDraft = '';
     if (existingChapter && existingChapter.current_content) {
-      // 2. Strip media from the old draft before archiving
       strippedOldDraft = stripMediaFromDraft(existingChapter.current_content);
     }
 
-    // 3. Perform the atomic update: Overwrite live content and push stripped archive
     const updateQuery: any = {
       $set: { 
         current_content: newIncomingHtml,
@@ -62,11 +145,10 @@ app.post('/api/chapters/:id/save', async (req: Request, res: Response) => {
       }
     };
 
-    // Only push to history if a previous draft actually existed
     if (strippedOldDraft) {
       updateQuery.$push = {
         history: {
-          $each: [{ content: strippedOldDraft, timestamp: new Date() }],$slice: -10 // Strictly maintain only the 10 most recent backups
+          $each: [{ content: strippedOldDraft, timestamp: new Date() }],$slice: -10 
         }
       };
     }
@@ -74,53 +156,84 @@ app.post('/api/chapters/:id/save', async (req: Request, res: Response) => {
     await chaptersCollection.updateOne(
       { _id: chapterId },
       updateQuery,
-      { upsert: true } // Create the chapter document if it doesn't exist
+      { upsert: true } 
     );
 
     res.status(200).json({ message: 'Draft saved and archived successfully.' });
   } catch (error) {
     console.error('Save error:', error);
     res.status(500).json({ error: 'Failed to save draft' });
-  } finally {
-    await client.close();
   }
 });
 
-app.post('/api/chapters/:id/comments', async (req: Request, res: Response) => {
+// CREATE A NEW CHAPTER
+app.post('/api/chapters', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    await client.connect();
+    const db = client.db('writers_sandbox');
+    
+    const newChapter = {
+      author_id: new ObjectId(req.userId),
+      title: req.body.title || 'Untitled Draft',
+      share_token: generateShareToken(),
+      current_content: '<p>Start writing here...</p>',
+      history: [],
+      comments: [],
+      created_at: new Date(),
+      last_updated: new Date()
+    };
+
+    const result = await db.collection('chapters').insertOne(newChapter);
+    res.status(201).json({ chapterId: result.insertedId, shareToken: newChapter.share_token });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create chapter' });
+  }
+});
+
+// GET ALL CHAPTERS FOR LOGGED-IN WRITER
+app.get('/api/chapters', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    await client.connect();
+    const db = client.db('writers_sandbox');
+    
+    // Fetch only chapters owned by this specific user
+    const chapters = await db.collection('chapters')
+      .find({ author_id: new ObjectId(req.userId) })
+      .project({ title: 1, last_updated: 1, share_token: 1 }) // Only send necessary data
+      .sort({ last_updated: -1 })
+      .toArray();
+
+    res.status(200).json(chapters);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch chapters' });
+  }
+});
+
+// GET SPECIFIC CHAPTER (For the Editor)
+app.get('/api/chapters/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const chapterIdParam = req.params.id;
     if (typeof chapterIdParam !== 'string' || !ObjectId.isValid(chapterIdParam)) {
       return res.status(400).json({ error: 'Invalid chapter ID' });
     }
-
     const chapterId = new ObjectId(chapterIdParam);
-    const { highlightedText, commentText, position } = req.body;
-
+    
     await client.connect();
     const db = client.db('writers_sandbox');
+    
+    const chapter = await db.collection('chapters').findOne({ 
+      _id: chapterId,
+      author_id: new ObjectId(req.userId)
+    });
 
-    await db.collection<ChapterDocument>('chapters').updateOne(
-      { _id: chapterId },
-      {
-        $push: {
-          comments: {
-            id: new ObjectId(),
-            highlighted_text: highlightedText,
-            comment: commentText,
-            position,
-            created_at: new Date(),
-            resolved: false
-          }
-        }
-      }
-    );
+    if (!chapter) {
+      res.status(404).json({ error: 'Chapter not found or unauthorized' });
+      return;
+    }
 
-    res.status(200).json({ message: 'Comment saved successfully' });
+    res.status(200).json(chapter);
   } catch (error) {
-    console.error('Comment error:', error);
-    res.status(500).json({ error: 'Failed to save comment' });
-  } finally {
-    await client.close();
+    res.status(500).json({ error: 'Failed to load chapter' });
   }
 });
 
