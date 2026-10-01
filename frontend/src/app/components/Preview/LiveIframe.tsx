@@ -8,7 +8,7 @@ interface LiveIframeProps {
   css: string;
   setActiveHighlight: (highlight: { text: string, top: number, left: number } | null) => void;
   chapterId: string;
-  isBetaMode?: boolean; // Added optional flag
+  isBetaMode?: boolean; 
 }
 
 export default function LiveIframe({ html, css, setActiveHighlight, chapterId, isBetaMode = false }: LiveIframeProps) {
@@ -51,10 +51,17 @@ export default function LiveIframe({ html, css, setActiveHighlight, chapterId, i
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ newIncomingHtml: html })
+        // FIX: Now sending BOTH HTML and CSS to the backend
+        body: JSON.stringify({ 
+          newIncomingHtml: html,
+          css_content: css 
+        })
       });
 
       if (!response.ok) throw new Error('Failed to save draft.');
+      
+      // Optional: If you want to use a nice toast instead of an alert, you can dispatch an event here
+      // But for now, we'll keep the alert or you can replace it with your toast logic
       alert("Draft saved successfully!");
     } catch (error) {
       console.error("Save error:", error);
@@ -70,6 +77,7 @@ export default function LiveIframe({ html, css, setActiveHighlight, chapterId, i
       <head>
         <style>
           body { font-family: sans-serif; padding: 20px; }
+          /* CSS perfectly injected here */
           ${css}
         </style>
         <script>
@@ -109,7 +117,6 @@ export default function LiveIframe({ html, css, setActiveHighlight, chapterId, i
         <h2 className="font-bold text-gray-800">
           {isBetaMode ? 'Live Preview' : 'Live Mobile Preview'}
         </h2>
-        {/* Only render the save button if we are NOT in beta mode */}
         {!isBetaMode && (
           <button 
             className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-4 py-1 rounded text-sm shadow transition-colors"
