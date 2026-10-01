@@ -53,7 +53,9 @@ function EditorWorkspace() {
         if (!response.ok) throw new Error('Failed to load draft');
         
         const data = await response.json();
+        
         if (data.current_content) setHtmlContent(data.current_content);
+        if (data.css_content) setCssContent(data.css_content); // <-- CSS Loading applied here
         if (data.comments) setComments(data.comments);
         
       } catch (error) {
