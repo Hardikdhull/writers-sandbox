@@ -11,10 +11,11 @@ import * as cheerio from 'cheerio';
 import { registerWriter, loginWriter } from './controllers/authController.js';
 import { requireAuth, type AuthRequest } from './middleware/authMiddleware.js';
 
-
-
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true
+}));
 app.use(express.json());
 
 const PORT = process.env.PORT || 5000;
@@ -52,7 +53,7 @@ const generateShareToken = () => Math.random().toString(36).substring(2, 8);
 app.post('/api/auth/register', registerWriter);
 app.post('/api/auth/login', loginWriter);
 
-// GET CHAPTER BY SHARE TOKEN (For Beta Readers) - ADDED THIS ROUTE
+// GET CHAPTER BY SHARE TOKEN (For Beta Readers)
 app.get('/api/beta/:token', async (req: Request, res: Response) => {
   try {
     await client.connect();
@@ -125,7 +126,9 @@ app.post('/api/chapters/:id/save', requireAuth, async (req: AuthRequest, res: Re
       return res.status(400).json({ error: 'Invalid chapter ID' });
     }
     const chapterId = new ObjectId(chapterIdParam);
-    const { newIncomingHtml } = req.body;
+    
+    // EXTRACT BOTH HTML AND CSS
+    const { newIncomingHtml, css_content } = req.body;
 
     await client.connect();
     const db = client.db('writers_sandbox');
@@ -138,9 +141,11 @@ app.post('/api/chapters/:id/save', requireAuth, async (req: AuthRequest, res: Re
       strippedOldDraft = stripMediaFromDraft(existingChapter.current_content);
     }
 
+    // SAVE BOTH HTML AND CSS TO MONGODB
     const updateQuery: any = {
       $set: { 
         current_content: newIncomingHtml,
+        css_content: css_content,
         last_updated: new Date()
       }
     };
@@ -177,6 +182,7 @@ app.post('/api/chapters', requireAuth, async (req: AuthRequest, res: Response) =
       title: req.body.title || 'Untitled Draft',
       share_token: generateShareToken(),
       current_content: '<p>Start writing here...</p>',
+      css_content: '', // INITIATE BLANK CSS FIELD
       history: [],
       comments: [],
       created_at: new Date(),
@@ -196,10 +202,9 @@ app.get('/api/chapters', requireAuth, async (req: AuthRequest, res: Response) =>
     await client.connect();
     const db = client.db('writers_sandbox');
     
-    // Fetch only chapters owned by this specific user
     const chapters = await db.collection('chapters')
       .find({ author_id: new ObjectId(req.userId) })
-      .project({ title: 1, last_updated: 1, share_token: 1 }) // Only send necessary data
+      .project({ title: 1, last_updated: 1, share_token: 1 })
       .sort({ last_updated: -1 })
       .toArray();
 
