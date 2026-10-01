@@ -39,10 +39,10 @@ export default function CodePanes({ html, setHtml, css, setCss }: CodePanesProps
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-900 border-r border-gray-700">
+    <div className="flex flex-col h-full min-h-0 overflow-hidden bg-gray-900 border-r border-gray-700">
       
       {/* Story Editor Section */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-h-0">
         <div className="flex justify-between items-center bg-gray-800 p-2 border-b border-gray-700">
           <span className="font-bold text-indigo-400 text-sm ml-2">Story Editor</span>
           
@@ -67,7 +67,7 @@ export default function CodePanes({ html, setHtml, css, setCss }: CodePanesProps
         </div>
 
         {mode === 'text' ? (
-          <div className="flex-1 flex flex-col bg-white">
+          <div className="flex-1 flex flex-col min-h-0 bg-white">
             <div className="flex gap-2 p-2 bg-gray-100 border-b border-gray-300 text-gray-800 text-sm">
               <button onClick={() => formatText('bold')} className="px-3 py-1 font-bold hover:bg-gray-200 rounded">B</button>
               <button onClick={() => formatText('italic')} className="px-3 py-1 italic hover:bg-gray-200 rounded">I</button>
@@ -79,7 +79,7 @@ export default function CodePanes({ html, setHtml, css, setCss }: CodePanesProps
               contentEditable
               onInput={handleInput}
               suppressContentEditableWarning={true}
-              className="flex-1 p-6 text-gray-900 overflow-y-auto focus:outline-none text-base leading-relaxed"
+              className="w-full flex-1 min-h-0 overflow-y-auto p-4 focus:outline-none"
             />
           </div>
         ) : (
@@ -97,7 +97,7 @@ export default function CodePanes({ html, setHtml, css, setCss }: CodePanesProps
         )}
       </div>
 
-      <div className="h-64 flex flex-col border-t border-gray-700">
+      <div className="h-64 shrink-0 flex flex-col border-t border-gray-700">
         <div className="bg-gray-800 p-2 border-b border-gray-700">
           <span className="font-bold text-pink-400 text-sm ml-2">Work Skin CSS</span>
         </div>
