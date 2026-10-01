@@ -32,6 +32,10 @@ export default function BetaReaderView() {
         
         setHtmlContent(data.current_content || '');
         setChapterId(data._id); // Save the actual DB ID for posting comments
+        
+        // THIS IS THE CRUCIAL FIX THAT WAS MISSING:
+        if (data.css_content) setCssContent(data.css_content); 
+        
         if (data.comments) setComments(data.comments);
         
       } catch (err: any) {
