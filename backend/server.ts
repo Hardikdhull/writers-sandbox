@@ -53,6 +53,11 @@ const generateShareToken = () => Math.random().toString(36).substring(2, 8);
 app.post('/api/auth/register', registerWriter);
 app.post('/api/auth/login', loginWriter);
 
+// HEALTH CHECK ROUTE (For cron-job.org)
+app.get('/ping', (req: Request, res: Response) => {
+  res.status(200).send('Render backend is awake!');
+});
+
 // GET CHAPTER BY SHARE TOKEN (For Beta Readers)
 app.get('/api/beta/:token', async (req: Request, res: Response) => {
   try {
