@@ -1,139 +1,114 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
-
-interface LiveIframeProps {
+interface CodePanesProps {
   html: string;
+  setHtml: (val: string) => void;
   css: string;
-  setActiveHighlight: (highlight: { text: string, top: number, left: number } | null) => void;
-  chapterId: string;
-  isBetaMode?: boolean; 
+  setCss: (val: string) => void;
 }
 
-export default function LiveIframe({ html, css, setActiveHighlight, chapterId, isBetaMode = false }: LiveIframeProps) {
-  const [isSaving, setIsSaving] = useState(false);
-  
+export default function CodePanes({ html, setHtml, css, setCss }: CodePanesProps) {
+  const [mode, setMode] = useState<'text' | 'html'>('text');
+  const editorRef = useRef<HTMLDivElement>(null);
+  const isInitialized = useRef(false);
+
+  // FIX: Only inject the HTML from the database ONCE when the component loads
+  // or when switching tabs. This stops the cursor from resetting on every keystroke.
   useEffect(() => {
-    const handleIframeMessage = (event: MessageEvent) => {
-      if (event.data.type === 'TEXT_HIGHLIGHTED') {
-        setActiveHighlight({
-          text: event.data.text,
-          top: event.data.position.top,
-          left: event.data.position.left
-        });
-      } else if (event.data.type === 'CLEAR_HIGHLIGHT') {
-        setActiveHighlight(null);
+    if (editorRef.current && mode === 'text') {
+      if (!isInitialized.current || editorRef.current.innerHTML === '') {
+        editorRef.current.innerHTML = html;
+        isInitialized.current = true;
       }
-    };
-
-    window.addEventListener('message', handleIframeMessage);
-    return () => window.removeEventListener('message', handleIframeMessage);
-  }, [setActiveHighlight]);
-
-  const handleSaveDraft = async () => {
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      alert("You must be logged in to save drafts.");
-      return;
     }
-    if (!chapterId.trim()) {
-      alert("No active chapter ID found.");
-      return;
-    }
+  }, [html, mode]);
 
-    setIsSaving(true);
-    try {
-      const response = await fetch(`${API_URL}/api/chapters/${encodeURIComponent(chapterId.trim())}/save`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        // FIX: Now sending BOTH HTML and CSS to the backend
-        body: JSON.stringify({ 
-          newIncomingHtml: html,
-          css_content: css 
-        })
-      });
-
-      if (!response.ok) throw new Error('Failed to save draft.');
-      
-      // Optional: If you want to use a nice toast instead of an alert, you can dispatch an event here
-      // But for now, we'll keep the alert or you can replace it with your toast logic
-      alert("Draft saved successfully!");
-    } catch (error) {
-      console.error("Save error:", error);
-      alert("Failed to save draft. Please try logging in again.");
-    } finally {
-      setIsSaving(false);
+  const handleInput = () => {
+    if (editorRef.current) {
+      setHtml(editorRef.current.innerHTML);
     }
   };
 
-  const combinedCode = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <style>
-          body { font-family: sans-serif; padding: 20px; }
-          /* CSS perfectly injected here */
-          ${css}
-        </style>
-        <script>
-          document.addEventListener('mouseup', () => {
-            const selection = window.getSelection();
-            const text = selection.toString().trim();
-            
-            if (text.length > 0) {
-              const range = selection.getRangeAt(0);
-              const rect = range.getBoundingClientRect();
-              
-              window.parent.postMessage({
-                type: 'TEXT_HIGHLIGHTED',
-                text: text,
-                position: { 
-                  top: rect.bottom + window.scrollY, 
-                  left: rect.left + window.scrollX 
-                }
-              }, '*');
-            } else {
-              window.parent.postMessage({ type: 'CLEAR_HIGHLIGHT' }, '*');
-            }
-          });
-        </script>
-      </head>
-      <body>
-        <div id="workskin">
-          ${html}
-        </div>
-      </body>
-    </html>
-  `;
+  const formatText = (command: string) => {
+    document.execCommand(command, false, '');
+    if (editorRef.current) {
+      editorRef.current.focus();
+      setHtml(editorRef.current.innerHTML);
+    }
+  };
 
   return (
-    <div className="flex flex-col h-full p-4">
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="font-bold text-gray-800">
-          {isBetaMode ? 'Live Preview' : 'Live Mobile Preview'}
-        </h2>
-        {!isBetaMode && (
-          <button 
-            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-4 py-1 rounded text-sm shadow transition-colors"
-            onClick={handleSaveDraft}
-            disabled={isSaving}
-          >
-            {isSaving ? 'Saving...' : 'Save Draft'}
-          </button>
+    <div className="flex flex-col h-full bg-gray-900 border-r border-gray-700">
+      
+      {/* Story Editor Section */}
+      <div className="flex-1 flex flex-col">
+        <div className="flex justify-between items-center bg-gray-800 p-2 border-b border-gray-700">
+          <span className="font-bold text-indigo-400 text-sm ml-2">Story Editor</span>
+          
+          <div className="flex rounded overflow-hidden border border-gray-600 mr-2">
+            <button 
+              onClick={() => {
+                setMode('text');
+                isInitialized.current = false; // Force a re-sync when switching back
+              }}
+              className={`px-4 py-1 text-xs font-bold transition-colors ${mode === 'text' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'}`}
+            >
+              Rich Text
+            </button>
+            <button 
+              onClick={() => setMode('html')}
+              className={`px-4 py-1 text-xs font-bold transition-colors ${mode === 'html' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white hover:bg-gray-700'}`}
+              title="Only needed for advanced Work Skins"
+            >
+              HTML
+            </button>
+          </div>
+        </div>
+
+        {mode === 'text' ? (
+          <div className="flex-1 flex flex-col bg-white">
+            <div className="flex gap-2 p-2 bg-gray-100 border-b border-gray-300 text-gray-800 text-sm">
+              <button onClick={() => formatText('bold')} className="px-3 py-1 font-bold hover:bg-gray-200 rounded">B</button>
+              <button onClick={() => formatText('italic')} className="px-3 py-1 italic hover:bg-gray-200 rounded">I</button>
+              <button onClick={() => formatText('underline')} className="px-3 py-1 underline hover:bg-gray-200 rounded">U</button>
+            </div>
+            
+            <div 
+              ref={editorRef}
+              contentEditable
+              onInput={handleInput}
+              suppressContentEditableWarning={true}
+              className="flex-1 p-6 text-gray-900 overflow-y-auto focus:outline-none text-base leading-relaxed"
+            />
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col">
+            <div className="bg-gray-800 text-xs text-yellow-400 p-2 px-4 border-b border-gray-700">
+              Note: This is the raw HTML generated by the Rich Text editor. Edit here to manually assign Work Skin CSS classes.
+            </div>
+            <textarea 
+              className="flex-1 bg-gray-900 p-4 text-sm font-mono focus:outline-none text-gray-100 resize-none border-none focus:ring-2 focus:ring-indigo-500"
+              value={html}
+              onChange={(e) => setHtml(e.target.value)}
+              spellCheck="false"
+            />
+          </div>
         )}
       </div>
-      
-      <iframe 
-        className="flex-1 w-full bg-white border-2 border-gray-300 rounded-lg shadow-inner"
-        srcDoc={combinedCode}
-        title="AO3 Live Preview"
-        sandbox="allow-scripts allow-same-origin"
-      />
+
+      <div className="h-64 flex flex-col border-t border-gray-700">
+        <div className="bg-gray-800 p-2 border-b border-gray-700">
+          <span className="font-bold text-pink-400 text-sm ml-2">Work Skin CSS</span>
+        </div>
+        <textarea 
+          className="flex-1 bg-gray-900 p-4 text-sm font-mono focus:outline-none text-gray-100 resize-none border-none focus:ring-2 focus:ring-pink-500"
+          value={css}
+          onChange={(e) => setCss(e.target.value)}
+          spellCheck="false"
+          placeholder=".my-custom-class { color: red; }"
+        />
+      </div>
     </div>
   );
 }
