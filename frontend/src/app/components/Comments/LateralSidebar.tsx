@@ -4,7 +4,7 @@ import { useState } from 'react';
 // Central API route fallback retained from your config[cite: 2]
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
-export default function LateralSidebar({ comments, activeHighlight, setActiveHighlight, chapterId, setChapterId }: any) {
+export default function LateralSidebar({ comments, setComments, activeHighlight, setActiveHighlight, chapterId, setChapterId }: any) {
   // Loading and error states retained[cite: 2]
   const [commentText, setCommentText] = useState('');
   const [isSavingComment, setIsSavingComment] = useState(false);
@@ -26,6 +26,15 @@ export default function LateralSidebar({ comments, activeHighlight, setActiveHig
         })
       });
       if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
+
+      const newComment = {
+        type: 'inline',
+        highlighted_text: activeHighlight.text,
+        comment: commentText,
+        position: { top: activeHighlight.top, left: activeHighlight.left }
+      };
+      setComments((prev: any[]) => [...prev, newComment]);
+
       setActiveHighlight(null);
       setCommentText('');
     } catch (error) {

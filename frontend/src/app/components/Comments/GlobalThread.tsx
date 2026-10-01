@@ -3,7 +3,7 @@ import { useState } from 'react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 
-export default function GlobalThread({ comments, chapterId }: any) {
+export default function GlobalThread({ comments, setComments, chapterId }: any) {
   const [globalText, setGlobalText] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -18,7 +18,13 @@ export default function GlobalThread({ comments, chapterId }: any) {
           commentText: globalText,
         })
       });
-      if (response.ok) setGlobalText('');
+      if (response.ok) {
+        setComments((prev: any[]) => [...prev, {
+          type: 'global',
+          comment: globalText
+        }]);
+        setGlobalText('');
+      }
     } catch (error) {
       console.error('Failed to post global note:', error);
     } finally {

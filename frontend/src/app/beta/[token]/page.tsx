@@ -51,30 +51,34 @@ export default function BetaReaderView() {
   if (error) return <div className="h-screen bg-gray-900 text-red-400 flex items-center justify-center">{error}</div>;
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-900 text-gray-100">
+    <div className="flex flex-col min-h-screen bg-gray-900 text-gray-100 overflow-x-hidden">
+      
       {/* Beta Header */}
-      <div className="bg-gray-800 p-4 text-center border-b border-gray-700">
+      <div className="bg-gray-800 p-4 text-center border-b border-gray-700 shadow-md z-10 sticky top-0">
         <h1 className="text-xl font-bold text-indigo-400">Beta Reader Mode</h1>
         <p className="text-sm text-gray-400">Highlight any text to leave a suggestion.</p>
       </div>
 
-      <div className="flex flex-1 h-[70vh] justify-center max-w-7xl mx-auto w-full">
-        {/* Center: Live AO3 Preview (Wider for reading) */}
+      {/* Main Reading Workspace */}
+      <div className="flex w-full h-[85vh] justify-center max-w-7xl mx-auto border-x border-gray-800">
+        
+        {/* Center: Live AO3 Preview */}
         <div className="w-1/2 bg-gray-100 relative">
-          <LiveIframe 
-            html={htmlContent} 
-            css={cssContent} 
-            setActiveHighlight={setActiveHighlight} 
+          <LiveIframe
+            html={htmlContent}
+            css={cssContent}
+            setActiveHighlight={setActiveHighlight}
             chapterId={chapterId}
             isBetaMode={true}
           />
         </div>
-
+        
         {/* Right: Google Docs Style Sidebar */}
-        <div className="w-1/3 bg-white relative overflow-y-auto border-l border-gray-300">
-          <LateralSidebar 
-            comments={inlineComments} 
-            activeHighlight={activeHighlight} 
+        <div className="w-1/3 bg-white relative border-l border-gray-300">
+          <LateralSidebar
+            comments={inlineComments}
+            setComments={setComments}
+            activeHighlight={activeHighlight}
             setActiveHighlight={setActiveHighlight}
             chapterId={chapterId}
             setChapterId={setChapterId}
@@ -82,12 +86,15 @@ export default function BetaReaderView() {
         </div>
       </div>
 
-      {/* Bottom: YouTube Style Global Thread */}
-      <div className="h-[20vh] bg-gray-800 p-6 overflow-y-auto border-t border-gray-700">
-        <GlobalThread 
-          comments={globalComments} 
-          chapterId={chapterId} 
-        />
+      {/* Overall Feedback Thread */}
+      <div className="bg-gray-800 p-10 border-t-4 border-gray-900 flex-1">
+        <div className="max-w-4xl mx-auto">
+          <GlobalThread
+            comments={globalComments}
+            setComments={setComments}
+            chapterId={chapterId}
+          />
+        </div>
       </div>
     </div>
   );
