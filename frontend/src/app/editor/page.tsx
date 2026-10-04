@@ -18,7 +18,7 @@ function EditorWorkspace() {
   const [chapterId, setChapterId] = useState(searchParams.get('chapterId') || '');
   
   const [htmlContent, setHtmlContent] = useState('<div class="thumb-wrapper">\n  <div class="thumb-scroll-area">\n    <p>Paste AO3 text here...</p>\n  </div>\n</div>');
-  const [cssContent, setCssContent] = useState('.thumb-wrapper { position: relative; width: 100%; max-width: 500px; margin: 20px auto; overflow: hidden; }\n.thumb-scroll-area { max-height: 400px; overflow-y: auto; padding: 15px; border: 2px solid #ccc; border-radius: 12px; }');
+  const [cssContent, setCssContent] = useState('.thumb-wrapper { position: relative; width: 100%; max-width: 500px; margin: 20px auto; overflow: hidden; }\n.thumb-scroll-area { max-height: 400px; overflow-y: auto; padding: 15px; border: 2px solid #ccc; border-radius: 12px; color: black; }');
   
   const [comments, setComments] = useState<any[]>([]);
   const [activeHighlight, setActiveHighlight] = useState<{ text: string, top: number, left: number } | null>(null);
