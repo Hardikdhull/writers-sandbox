@@ -79,7 +79,7 @@ export default function CodePanes({ html, setHtml, css, setCss }: CodePanesProps
               contentEditable
               onInput={handleInput}
               suppressContentEditableWarning={true}
-              className="w-full flex-1 min-h-0 overflow-y-auto p-4 text-black focus:outline-none"
+              className="w-full flex-1 min-h-0 overflow-y-auto p-4 focus:outline-none"
             />
           </div>
         ) : (

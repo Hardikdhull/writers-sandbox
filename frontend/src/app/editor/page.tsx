@@ -12,6 +12,8 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:5000';
 function EditorWorkspace() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const [history, setHistory] = useState<any[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   const [chapterId, setChapterId] = useState(searchParams.get('chapterId') || '');
   
@@ -55,8 +57,9 @@ function EditorWorkspace() {
         const data = await response.json();
         
         if (data.current_content) setHtmlContent(data.current_content);
-        if (data.css_content) setCssContent(data.css_content); // <-- CSS Loading applied here
+        if (data.css_content) setCssContent(data.css_content); 
         if (data.comments) setComments(data.comments);
+        if (data.history) setHistory(data.history);
         
       } catch (error) {
         console.error(error);
@@ -67,6 +70,13 @@ function EditorWorkspace() {
     };
     loadChapter();
   }, [chapterId, router]);
+
+  const handleRestore = (historicalContent: string) => {
+    if (window.confirm("Are you sure you want to replace your current draft with this older version?")) {
+      setHtmlContent(historicalContent);
+      setShowHistory(false);
+    }
+  };
 
   const inlineComments = comments.filter(c => c.type === 'inline');
   const globalComments = comments.filter(c => c.type === 'global');
@@ -86,7 +96,17 @@ function EditorWorkspace() {
         >
           <span>← Back to Dashboard</span>
         </button>
-        <div className="text-indigo-400 font-bold tracking-wider">Editor Workspace</div>
+        
+        <div className="flex items-center gap-4">
+          <div className="text-indigo-400 font-bold tracking-wider">Editor Workspace</div>
+          <button 
+            onClick={() => setShowHistory(true)}
+            className="bg-gray-700 hover:bg-gray-600 text-xs px-3 py-1.5 rounded text-white transition-colors shadow"
+          >
+            View History ({history.length})
+          </button>
+        </div>
+        
         <div className="w-32"></div>
       </div>
 
@@ -130,6 +150,44 @@ function EditorWorkspace() {
           />
         </div>
       </div>
+
+      {/* VERSION HISTORY MODAL */}
+      {showHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 z-50 flex justify-center items-center p-4">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6 text-gray-900 max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-bold">Version History</h2>
+              <button onClick={() => setShowHistory(false)} className="text-gray-500 hover:text-red-500 font-bold text-xl">✕</button>
+            </div>
+            
+            {history.length === 0 ? (
+              <p className="text-gray-500">No previous versions saved yet.</p>
+            ) : (
+              <div className="overflow-y-auto flex-1 space-y-4 pr-2">
+                {history.map((h, index) => (
+                  <div key={index} className="border border-gray-200 p-4 rounded bg-gray-50">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-bold text-sm text-indigo-600">
+                        Saved: {new Date(h.timestamp).toLocaleString()}
+                      </span>
+                      <button 
+                        onClick={() => handleRestore(h.content)}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1 rounded text-xs transition-colors"
+                      >
+                        Restore This Version
+                      </button>
+                    </div>
+                    {/* Tiny preview of the text stripped of HTML */}
+                    <div className="text-sm text-gray-600 truncate opacity-70">
+                      {h.content.replace(/<[^>]+>/g, '').substring(0, 120)}...
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
